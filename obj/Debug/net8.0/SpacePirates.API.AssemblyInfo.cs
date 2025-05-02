@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("SpacePirates.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+42b98b78f02e49db6ec03608807b4bde26d1e53f")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+6dbcc0c9a108b92e320b8ea5fd600aa270f42adc")]
 [assembly: System.Reflection.AssemblyProductAttribute("SpacePirates.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("SpacePirates.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
