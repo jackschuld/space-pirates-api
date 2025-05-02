@@ -1,0 +1,3 @@
+﻿<Project>
+  <Import Project="..\build\SpacePirates.API.props" />
+</Project>
