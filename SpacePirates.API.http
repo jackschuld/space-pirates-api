@@ -1,0 +1,6 @@
+@SpacePirates.API_HostAddress = http://localhost:5139
+
+GET {{SpacePirates.API_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
