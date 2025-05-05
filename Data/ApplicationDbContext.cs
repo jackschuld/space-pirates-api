@@ -19,6 +19,12 @@ namespace SpacePirates.API.Data
         public DbSet<FuelSystem> FuelSystems { get; set; }
         public DbSet<CargoSystem> CargoSystems { get; set; }
         public DbSet<WeaponSystem> WeaponSystems { get; set; }
+        public DbSet<Galaxy> Galaxies { get; set; }
+        public DbSet<SolarSystem> SolarSystems { get; set; }
+        public DbSet<Planet> Planets { get; set; }
+        public DbSet<Resource> Resources { get; set; }
+        public DbSet<PlanetResource> PlanetResources { get; set; }
+        public DbSet<CargoItem> CargoItems { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
