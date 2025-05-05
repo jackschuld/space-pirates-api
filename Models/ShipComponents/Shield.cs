@@ -4,8 +4,10 @@ namespace SpacePirates.API.Models.ShipComponents
     {
         public int CurrentIntegrity { get; set; }
         public bool IsDown => CurrentIntegrity <= 0;
+        public bool IsActive { get; set; }
         public double RechargeRate => CurrentLevel * 0.5; // Shield recharges 0.5 per level per second
         public DateTime LastRechargeTime { get; private set; } = DateTime.UtcNow;
+        public bool Charging { get; set; } = false;
         
         public override int CalculateMaxCapacity()
         {
@@ -15,6 +17,7 @@ namespace SpacePirates.API.Models.ShipComponents
         public Shield()
         {
             CurrentIntegrity = CalculateMaxCapacity();
+            IsActive = true; // Shields start active by default
         }
 
         public int AbsorbDamage(int incomingDamage)
