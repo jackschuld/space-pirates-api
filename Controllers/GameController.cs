@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using SpacePirates.API.Data;
 using SpacePirates.API.Models;
+using SpacePirates.API.Models.ShipComponents;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.EntityFrameworkCore;
+using SpacePirates.API.Models.DTOs;
 
 namespace SpacePirates.API.Controllers
 {
@@ -107,14 +110,70 @@ namespace SpacePirates.API.Controllers
             _db.GameSessions.Add(session);
             await _db.SaveChangesAsync();
 
-            return Ok(new
+            // Fetch the full ship and galaxy with all nested data
+            var fullShip = _db.Ships
+                .Where(s => s.Id == ship.Id)
+                .Include(s => s.Position)
+                .FirstOrDefault();
+
+            var fullGalaxy = _db.Galaxies
+                .Where(g => g.Id == galaxy.Id)
+                .Include(g => g.SolarSystems)
+                    .ThenInclude(sys => sys.Planets)
+                        .ThenInclude(p => p.Resources)
+                            .ThenInclude(r => r.Resource)
+                .FirstOrDefault();
+
+            var shipDto = new ShipDto
             {
-                gameId = session.Id,
-                shipId = ship.Id,
-                galaxyId = galaxy.Id,
-                shipName = ship.Name,
-                captainName = ship.CaptainName,
-                galaxyName = galaxy.Name
+                Id = fullShip.Id,
+                Name = fullShip.Name,
+                CaptainName = fullShip.CaptainName,
+                Credits = fullShip.Credits,
+                Position = fullShip.Position == null ? null : new PositionDto
+                {
+                    X = fullShip.Position.X,
+                    Y = fullShip.Position.Y
+                }
+            };
+
+            var galaxyDto = new GalaxyDto
+            {
+                Id = fullGalaxy.Id,
+                Name = fullGalaxy.Name,
+                SolarSystems = fullGalaxy.SolarSystems.Select(sys => new SolarSystemDto
+                {
+                    Id = sys.Id,
+                    Name = sys.Name,
+                    X = sys.X,
+                    Y = sys.Y,
+                    SunType = sys.SunType,
+                    Planets = sys.Planets.Select(p => new PlanetDto
+                    {
+                        Id = p.Id,
+                        Name = p.Name,
+                        PlanetType = p.PlanetType,
+                        Resources = p.Resources.Select(r => new PlanetResourceDto
+                        {
+                            Id = r.Id,
+                            AmountAvailable = r.AmountAvailable,
+                            Resource = new ResourceDto
+                            {
+                                Id = r.Resource.Id,
+                                Name = r.Resource.Name,
+                                ResourceType = r.Resource.ResourceType,
+                                WeightPerUnit = r.Resource.WeightPerUnit,
+                                Description = r.Resource.Description
+                            }
+                        }).ToList()
+                    }).ToList()
+                }).ToList()
+            };
+
+            return Ok(new GameStateDto
+            {
+                Ship = shipDto,
+                Galaxy = galaxyDto
             });
         }
 
@@ -141,52 +200,68 @@ namespace SpacePirates.API.Controllers
         {
             var session = _db.GameSessions
                 .Where(s => s.Id == id)
-                .Select(s => new {
-                    gameId = s.Id,
-                    ship = new {
-                        s.Ship.Id,
-                        s.Ship.Name,
-                        s.Ship.CaptainName,
-                        s.Ship.Credits,
-                        s.Ship.Position,
-                        s.Ship.Hull,
-                        s.Ship.Shield,
-                        s.Ship.Engine,
-                        s.Ship.FuelSystem,
-                        s.Ship.CargoSystem,
-                        s.Ship.WeaponSystem
-                    },
-                    galaxy = new {
-                        s.Galaxy.Id,
-                        s.Galaxy.Name,
-                        solarSystems = s.Galaxy.SolarSystems.Select(sys => new {
-                            sys.Id,
-                            sys.Name,
-                            sys.X,
-                            sys.Y,
-                            sys.SunType,
-                            planets = sys.Planets.Select(p => new {
-                                p.Id,
-                                p.Name,
-                                p.PlanetType,
-                                resources = p.Resources.Select(r => new {
-                                    r.Id,
-                                    r.ResourceId,
-                                    r.Resource.Name,
-                                    r.Resource.ResourceType,
-                                    r.Resource.WeightPerUnit,
-                                    r.Resource.Description,
-                                    r.AmountAvailable
-                                })
-                            })
-                        })
-                    },
-                    session.CreatedAt,
-                    session.LastPlayed
-                })
+                .Include(s => s.Ship)
+                    .ThenInclude(ship => ship.Position)
+                .Include(s => s.Galaxy)
+                    .ThenInclude(g => g.SolarSystems)
+                        .ThenInclude(sys => sys.Planets)
+                            .ThenInclude(p => p.Resources)
+                                .ThenInclude(r => r.Resource)
                 .FirstOrDefault();
+
             if (session == null) return NotFound();
-            return Ok(session);
+
+            var shipDto = new ShipDto
+            {
+                Id = session.Ship.Id,
+                Name = session.Ship.Name,
+                CaptainName = session.Ship.CaptainName,
+                Credits = session.Ship.Credits,
+                Position = session.Ship.Position == null ? null : new PositionDto
+                {
+                    X = session.Ship.Position.X,
+                    Y = session.Ship.Position.Y
+                }
+            };
+
+            var galaxyDto = new GalaxyDto
+            {
+                Id = session.Galaxy.Id,
+                Name = session.Galaxy.Name,
+                SolarSystems = session.Galaxy.SolarSystems.Select(sys => new SolarSystemDto
+                {
+                    Id = sys.Id,
+                    Name = sys.Name,
+                    X = sys.X,
+                    Y = sys.Y,
+                    SunType = sys.SunType,
+                    Planets = sys.Planets.Select(p => new PlanetDto
+                    {
+                        Id = p.Id,
+                        Name = p.Name,
+                        PlanetType = p.PlanetType,
+                        Resources = p.Resources.Select(r => new PlanetResourceDto
+                        {
+                            Id = r.Id,
+                            AmountAvailable = r.AmountAvailable,
+                            Resource = new ResourceDto
+                            {
+                                Id = r.Resource.Id,
+                                Name = r.Resource.Name,
+                                ResourceType = r.Resource.ResourceType,
+                                WeightPerUnit = r.Resource.WeightPerUnit,
+                                Description = r.Resource.Description
+                            }
+                        }).ToList()
+                    }).ToList()
+                }).ToList()
+            };
+
+            return Ok(new GameStateDto
+            {
+                Ship = shipDto,
+                Galaxy = galaxyDto
+            });
         }
 
         // DELETE: api/game/{id}
