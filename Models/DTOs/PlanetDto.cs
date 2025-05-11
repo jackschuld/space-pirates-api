@@ -14,5 +14,6 @@ namespace SpacePirates.API.Models.DTOs
     {
         public string PlanetType { get; set; } = string.Empty;
         public List<PlanetResourceDto> Resources { get; set; } = new();
+        public bool IsDiscovered { get; set; }
     }
 } 

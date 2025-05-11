@@ -320,7 +320,8 @@ namespace SpacePirates.API.Controllers
                         WeightPerUnit = r.Resource.WeightPerUnit,
                         Description = r.Resource.Description
                     }
-                }).ToList()
+                }).ToList(),
+                IsDiscovered = planet.IsDiscovered
             };
         }
 
@@ -332,7 +333,8 @@ namespace SpacePirates.API.Controllers
                 Name = star.Name,
                 X = star.X,
                 Y = star.Y,
-                Type = star.Type
+                Type = star.Type,
+                IsDiscovered = star.IsDiscovered
             };
         }
 
