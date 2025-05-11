@@ -13,6 +13,9 @@ builder.Services.AddSwaggerGen();
 // Register ShipService
 builder.Services.AddScoped<IShipService, ShipService>();
 
+// Register IGalaxyGenerator and GalaxyGenerator
+builder.Services.AddScoped<IGalaxyGenerator, GalaxyGenerator>();
+
 // Configure DbContext
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 builder.Services.AddDbContext<ApplicationDbContext>(options =>

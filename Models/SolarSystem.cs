@@ -16,5 +16,7 @@ namespace SpacePirates.API.Models
         public double Y { get; set; }
         public string SunType { get; set; } = "G"; // e.g. G, K, M, etc.
         public List<Planet> Planets { get; set; } = new();
+        public int StarId { get; set; }
+        public Star Star { get; set; } = null!;
     }
 } 

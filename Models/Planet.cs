@@ -4,12 +4,8 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SpacePirates.API.Models
 {
-    public class Planet
+    public class Planet : CelestialObject
     {
-        [Key]
-        public int Id { get; set; }
-        [Required]
-        public string Name { get; set; } = string.Empty;
         public int SolarSystemId { get; set; }
         public SolarSystem SolarSystem { get; set; } = null!;
         public string PlanetType { get; set; } = "Terrestrial"; // e.g. Terrestrial, Gas Giant, etc.

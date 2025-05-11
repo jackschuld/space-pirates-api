@@ -26,6 +26,7 @@ namespace SpacePirates.API.Data
         public DbSet<PlanetResource> PlanetResources { get; set; }
         public DbSet<CargoItem> CargoItems { get; set; }
         public DbSet<GameSession> GameSessions { get; set; }
+        public DbSet<Star> Stars { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

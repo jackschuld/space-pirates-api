@@ -7,6 +7,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore;
 using SpacePirates.API.Models.DTOs;
+using SpacePirates.API.Services;
+using Microsoft.Extensions.Logging;
 
 namespace SpacePirates.API.Controllers
 {
@@ -15,9 +17,13 @@ namespace SpacePirates.API.Controllers
     public class GameController : ControllerBase
     {
         private readonly ApplicationDbContext _db;
-        public GameController(ApplicationDbContext db)
+        private readonly IGalaxyGenerator _galaxyGenerator;
+        private readonly ILogger<GameController> _logger;
+        public GameController(ApplicationDbContext db, IGalaxyGenerator galaxyGenerator, ILogger<GameController> logger)
         {
             _db = db;
+            _galaxyGenerator = galaxyGenerator;
+            _logger = logger;
         }
 
         // POST: api/game/start
@@ -43,16 +49,35 @@ namespace SpacePirates.API.Controllers
 
             // 2. Generate random galaxy
             var galaxy = new Galaxy { Name = $"Galaxy-{Guid.NewGuid().ToString()[..6]}" };
+            _db.Galaxies.Add(galaxy);
+            await _db.SaveChangesAsync(); // Save first to get a valid Galaxy.Id
+
             var rand = new Random();
             int numSystems = rand.Next(5, 9);
             for (int i = 0; i < numSystems; i++)
             {
+                // Create a star for the system
+                var starType = rand.Next(0, 3) switch { 0 => "G", 1 => "K", _ => "M" };
+                var star = new Star
+                {
+                    Name = $"Star-{Guid.NewGuid().ToString()[..4]}",
+                    Type = starType,
+                    X = rand.NextDouble() * 100,
+                    Y = rand.NextDouble() * 100
+                };
+                _db.Stars.Add(star);
+                await _db.SaveChangesAsync(); // Ensure the star gets an Id
+
                 var system = new SolarSystem
                 {
                     Name = $"System-{Guid.NewGuid().ToString()[..4]}",
-                    X = rand.NextDouble() * 100,
-                    Y = rand.NextDouble() * 100,
-                    SunType = rand.Next(0, 3) switch { 0 => "G", 1 => "K", _ => "M" },
+                    X = star.X,
+                    Y = star.Y,
+                    SunType = star.Type,
+                    StarId = star.Id,
+                    Star = star,
+                    GalaxyId = galaxy.Id, // Set the now-valid GalaxyId
+                    Planets = new List<Planet>()
                 };
                 int numPlanets = rand.Next(2, 6);
                 for (int j = 0; j < numPlanets; j++)
@@ -77,9 +102,9 @@ namespace SpacePirates.API.Controllers
                     system.Planets.Add(planet);
                 }
                 galaxy.SolarSystems.Add(system);
+                _db.SolarSystems.Add(system);
             }
-            _db.Galaxies.Add(galaxy);
-            await _db.SaveChangesAsync();
+            await _db.SaveChangesAsync(); // Save all SolarSystems
 
             // 3. Create ship and components
             var ship = new Ship
@@ -118,63 +143,46 @@ namespace SpacePirates.API.Controllers
 
             var fullGalaxy = _db.Galaxies
                 .Where(g => g.Id == galaxy.Id)
-                .Include(g => g.SolarSystems)
-                    .ThenInclude(sys => sys.Planets)
+                .FirstOrDefault();
+            if (fullGalaxy != null)
+            {
+                var solarSystems = _db.SolarSystems
+                    .Where(ss => ss.GalaxyId == fullGalaxy.Id)
+                    .Include(ss => ss.Star)
+                    .Include(ss => ss.Planets)
                         .ThenInclude(p => p.Resources)
                             .ThenInclude(r => r.Resource)
-                .FirstOrDefault();
+                    .ToList();
+                fullGalaxy.SolarSystems = solarSystems;
 
-            var shipDto = new ShipDto
-            {
-                Id = fullShip.Id,
-                Name = fullShip.Name,
-                CaptainName = fullShip.CaptainName,
-                Credits = fullShip.Credits,
-                Position = fullShip.Position == null ? null : new PositionDto
+                var galaxyDto = new GalaxyDto
                 {
-                    X = fullShip.Position.X,
-                    Y = fullShip.Position.Y
-                }
-            };
+                    Id = fullGalaxy.Id,
+                    Name = fullGalaxy.Name,
+                    SolarSystems = solarSystems.Select(MapToSolarSystemDto).ToList()
+                };
 
-            var galaxyDto = new GalaxyDto
-            {
-                Id = fullGalaxy.Id,
-                Name = fullGalaxy.Name,
-                SolarSystems = fullGalaxy.SolarSystems.Select(sys => new SolarSystemDto
+                return Ok(new GameStateDto
                 {
-                    Id = sys.Id,
-                    Name = sys.Name,
-                    X = sys.X,
-                    Y = sys.Y,
-                    SunType = sys.SunType,
-                    Planets = sys.Planets.Select(p => new PlanetDto
+                    Ship = fullShip == null ? null : new ShipDto
                     {
-                        Id = p.Id,
-                        Name = p.Name,
-                        PlanetType = p.PlanetType,
-                        Resources = p.Resources.Select(r => new PlanetResourceDto
+                        Id = fullShip.Id,
+                        Name = fullShip.Name,
+                        CaptainName = fullShip.CaptainName,
+                        Credits = fullShip.Credits,
+                        Position = fullShip.Position == null ? null : new PositionDto
                         {
-                            Id = r.Id,
-                            AmountAvailable = r.AmountAvailable,
-                            Resource = new ResourceDto
-                            {
-                                Id = r.Resource.Id,
-                                Name = r.Resource.Name,
-                                ResourceType = r.Resource.ResourceType,
-                                WeightPerUnit = r.Resource.WeightPerUnit,
-                                Description = r.Resource.Description
-                            }
-                        }).ToList()
-                    }).ToList()
-                }).ToList()
-            };
-
-            return Ok(new GameStateDto
+                            X = fullShip.Position.X,
+                            Y = fullShip.Position.Y
+                        }
+                    },
+                    Galaxy = galaxyDto
+                });
+            }
+            else
             {
-                Ship = shipDto,
-                Galaxy = galaxyDto
-            });
+                return NotFound();
+            }
         }
 
         // GET: api/game/list
@@ -203,13 +211,28 @@ namespace SpacePirates.API.Controllers
                 .Include(s => s.Ship)
                     .ThenInclude(ship => ship.Position)
                 .Include(s => s.Galaxy)
-                    .ThenInclude(g => g.SolarSystems)
-                        .ThenInclude(sys => sys.Planets)
-                            .ThenInclude(p => p.Resources)
-                                .ThenInclude(r => r.Resource)
                 .FirstOrDefault();
+            List<SolarSystem> solarSystems = new List<SolarSystem>();
+            if (session?.Galaxy != null)
+            {
+                solarSystems = _db.SolarSystems
+                    .Where(ss => ss.GalaxyId == session.Galaxy.Id)
+                    .Include(ss => ss.Star)
+                    .Include(ss => ss.Planets)
+                        .ThenInclude(p => p.Resources)
+                            .ThenInclude(r => r.Resource)
+                    .ToList();
+                session.Galaxy.SolarSystems = solarSystems;
+            }
 
             if (session == null) return NotFound();
+
+            var galaxyDto = new GalaxyDto
+            {
+                Id = session.Galaxy.Id,
+                Name = session.Galaxy.Name,
+                SolarSystems = solarSystems.Select(MapToSolarSystemDto).ToList()
+            };
 
             var shipDto = new ShipDto
             {
@@ -222,39 +245,6 @@ namespace SpacePirates.API.Controllers
                     X = session.Ship.Position.X,
                     Y = session.Ship.Position.Y
                 }
-            };
-
-            var galaxyDto = new GalaxyDto
-            {
-                Id = session.Galaxy.Id,
-                Name = session.Galaxy.Name,
-                SolarSystems = session.Galaxy.SolarSystems.Select(sys => new SolarSystemDto
-                {
-                    Id = sys.Id,
-                    Name = sys.Name,
-                    X = sys.X,
-                    Y = sys.Y,
-                    SunType = sys.SunType,
-                    Planets = sys.Planets.Select(p => new PlanetDto
-                    {
-                        Id = p.Id,
-                        Name = p.Name,
-                        PlanetType = p.PlanetType,
-                        Resources = p.Resources.Select(r => new PlanetResourceDto
-                        {
-                            Id = r.Id,
-                            AmountAvailable = r.AmountAvailable,
-                            Resource = new ResourceDto
-                            {
-                                Id = r.Resource.Id,
-                                Name = r.Resource.Name,
-                                ResourceType = r.Resource.ResourceType,
-                                WeightPerUnit = r.Resource.WeightPerUnit,
-                                Description = r.Resource.Description
-                            }
-                        }).ToList()
-                    }).ToList()
-                }).ToList()
             };
 
             return Ok(new GameStateDto
@@ -272,6 +262,94 @@ namespace SpacePirates.API.Controllers
             if (session == null) return NotFound();
             _db.GameSessions.Remove(session);
             await _db.SaveChangesAsync();
+            return Ok();
+        }
+
+        // Example endpoint for generating a galaxy
+        [HttpPost("/api/game/generate-galaxy")]
+        public ActionResult<GalaxyDto> GenerateGalaxy([FromQuery] int numSystems = 10, [FromQuery] int minPlanets = 3, [FromQuery] int maxPlanets = 8)
+        {
+            var galaxy = _galaxyGenerator.GenerateGalaxy(numSystems, minPlanets, maxPlanets);
+            // Map to DTOs (implement mapping as needed)
+            var galaxyDto = MapToGalaxyDto(galaxy);
+            return Ok(galaxyDto);
+        }
+
+        private GalaxyDto MapToGalaxyDto(Galaxy galaxy)
+        {
+            return new GalaxyDto
+            {
+                Id = galaxy.Id,
+                Name = galaxy.Name,
+                SolarSystems = galaxy.SolarSystems.Select(MapToSolarSystemDto).ToList()
+            };
+        }
+
+        private SolarSystemDto MapToSolarSystemDto(SolarSystem system)
+        {
+            return new SolarSystemDto
+            {
+                Id = system.Id,
+                Name = system.Name,
+                X = system.X,
+                Y = system.Y,
+                SunType = system.SunType,
+                Planets = system.Planets.Select(MapToPlanetDto).ToList(),
+                Star = system.Star != null ? MapToStarDto(system.Star) : null
+            };
+        }
+
+        private PlanetDto MapToPlanetDto(Planet planet)
+        {
+            return new PlanetDto
+            {
+                Id = planet.Id,
+                Name = planet.Name,
+                X = planet.X,
+                Y = planet.Y,
+                PlanetType = planet.PlanetType,
+                Resources = planet.Resources.Select(r => new PlanetResourceDto
+                {
+                    Id = r.Id,
+                    AmountAvailable = r.AmountAvailable,
+                    Resource = new ResourceDto
+                    {
+                        Id = r.Resource.Id,
+                        Name = r.Resource.Name,
+                        ResourceType = r.Resource.ResourceType,
+                        WeightPerUnit = r.Resource.WeightPerUnit,
+                        Description = r.Resource.Description
+                    }
+                }).ToList()
+            };
+        }
+
+        private StarDto MapToStarDto(Star star)
+        {
+            return new StarDto
+            {
+                Id = star.Id,
+                Name = star.Name,
+                X = star.X,
+                Y = star.Y,
+                Type = star.Type
+            };
+        }
+
+        // POST: api/game/discover-star/{starId}
+        [HttpPost("discover-star/{starId}")]
+        public async Task<IActionResult> DiscoverStar(int starId)
+        {
+            _logger.LogInformation($"[DiscoverStar] Called with starId={starId}");
+            var star = await _db.Stars.FindAsync(starId);
+            if (star == null)
+            {
+                _logger.LogWarning($"[DiscoverStar] Star not found for starId={starId}");
+                return NotFound();
+            }
+            star.IsDiscovered = true;
+            await _db.SaveChangesAsync();
+            _logger.LogInformation($"[DiscoverStar] Star {starId} marked as discovered.");
             return Ok();
         }
     }

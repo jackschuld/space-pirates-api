@@ -10,5 +10,6 @@ namespace SpacePirates.API.Models.DTOs
         public double Y { get; set; }
         public string SunType { get; set; } = string.Empty;
         public List<PlanetDto> Planets { get; set; } = new();
+        public StarDto? Star { get; set; }
     }
 } 
