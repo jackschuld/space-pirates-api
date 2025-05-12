@@ -57,7 +57,8 @@ namespace SpacePirates.API.Controllers
             for (int i = 0; i < numSystems; i++)
             {
                 // Create a star for the system
-                var starType = rand.Next(0, 3) switch { 0 => "G", 1 => "K", _ => "M" };
+                string[] starTypes = { "G", "K", "M", "B", "O", "A", "F" };
+                var starType = starTypes[rand.Next(starTypes.Length)];
                 var star = new Star
                 {
                     Name = $"Star-{Guid.NewGuid().ToString()[..4]}",
@@ -80,12 +81,16 @@ namespace SpacePirates.API.Controllers
                     Planets = new List<Planet>()
                 };
                 int numPlanets = rand.Next(2, 6);
+                double minOrbit = 10.0;
+                double orbitGap = 10.0; // Fixed gap between orbits
                 for (int j = 0; j < numPlanets; j++)
                 {
                     var planet = new Planet
                     {
                         Name = $"Planet-{Guid.NewGuid().ToString()[..4]}",
                         PlanetType = rand.Next(0, 2) == 0 ? "Terrestrial" : "Gas Giant",
+                        X = 0, // Let the frontend determine the coordinates
+                        Y = 0, // Let the frontend determine the coordinates
                     };
                     // Add random resources to planet
                     int numRes = rand.Next(1, 4);
@@ -353,6 +358,39 @@ namespace SpacePirates.API.Controllers
             await _db.SaveChangesAsync();
             _logger.LogInformation($"[DiscoverStar] Star {starId} marked as discovered.");
             return Ok();
+        }
+
+        // POST: api/game/inspect-planet/{planetId}
+        [HttpPost("inspect-planet/{planetId}")]
+        public async Task<IActionResult> InspectPlanet(int planetId)
+        {
+            _logger.LogInformation($"[InspectPlanet] Called with planetId={planetId}");
+            var planet = await _db.Planets.FindAsync(planetId);
+            if (planet == null)
+            {
+                _logger.LogWarning($"[InspectPlanet] Planet not found for planetId={planetId}");
+                return NotFound();
+            }
+            planet.IsDiscovered = true;
+            await _db.SaveChangesAsync();
+            _logger.LogInformation($"[InspectPlanet] Planet {planetId} marked as discovered.");
+            return Ok();
+        }
+
+        // GET: api/game/solar-system/{systemId}
+        [HttpGet("solar-system/{systemId}")]
+        public async Task<ActionResult<SolarSystemDto>> GetSolarSystem(int systemId)
+        {
+            var system = await _db.SolarSystems
+                .Where(ss => ss.Id == systemId)
+                .Include(ss => ss.Star)
+                .Include(ss => ss.Planets)
+                    .ThenInclude(p => p.Resources)
+                        .ThenInclude(r => r.Resource)
+                .FirstOrDefaultAsync();
+            if (system == null)
+                return NotFound();
+            return Ok(MapToSolarSystemDto(system));
         }
     }
 
