@@ -179,6 +179,36 @@ namespace SpacePirates.API.Controllers
                         {
                             X = fullShip.Position.X,
                             Y = fullShip.Position.Y
+                        },
+                        FuelSystem = fullShip.FuelSystem == null ? null : new FuelSystemDto
+                        {
+                            CurrentLevel = fullShip.FuelSystem.CurrentLevel,
+                            CurrentFuel = fullShip.FuelSystem.CurrentFuel
+                        },
+                        Shield = fullShip.Shield == null ? null : new ShieldDto
+                        {
+                            CurrentLevel = fullShip.Shield.CurrentLevel,
+                            CurrentIntegrity = fullShip.Shield.CurrentIntegrity,
+                            IsActive = fullShip.Shield.IsActive
+                        },
+                        Hull = fullShip.Hull == null ? null : new HullDto
+                        {
+                            CurrentLevel = fullShip.Hull.CurrentLevel,
+                            CurrentIntegrity = fullShip.Hull.CurrentIntegrity
+                        },
+                        Engine = fullShip.Engine == null ? null : new EngineDto
+                        {
+                            CurrentLevel = fullShip.Engine.CurrentLevel
+                        },
+                        CargoSystem = fullShip.CargoSystem == null ? null : new CargoSystemDto
+                        {
+                            CurrentLevel = fullShip.CargoSystem.CurrentLevel,
+                            CurrentLoad = fullShip.CargoSystem.CurrentLoad,
+                            MaxCapacity = fullShip.CargoSystem.CalculateMaxCapacity()
+                        },
+                        WeaponSystem = fullShip.WeaponSystem == null ? null : new WeaponSystemDto
+                        {
+                            CurrentLevel = fullShip.WeaponSystem.CurrentLevel
                         }
                     },
                     Galaxy = galaxyDto
@@ -215,6 +245,18 @@ namespace SpacePirates.API.Controllers
                 .Where(s => s.Id == id)
                 .Include(s => s.Ship)
                     .ThenInclude(ship => ship.Position)
+                .Include(s => s.Ship)
+                    .ThenInclude(ship => ship.FuelSystem)
+                .Include(s => s.Ship)
+                    .ThenInclude(ship => ship.Shield)
+                .Include(s => s.Ship)
+                    .ThenInclude(ship => ship.Hull)
+                .Include(s => s.Ship)
+                    .ThenInclude(ship => ship.Engine)
+                .Include(s => s.Ship)
+                    .ThenInclude(ship => ship.CargoSystem)
+                .Include(s => s.Ship)
+                    .ThenInclude(ship => ship.WeaponSystem)
                 .Include(s => s.Galaxy)
                 .FirstOrDefault();
             List<SolarSystem> solarSystems = new List<SolarSystem>();
@@ -249,6 +291,36 @@ namespace SpacePirates.API.Controllers
                 {
                     X = session.Ship.Position.X,
                     Y = session.Ship.Position.Y
+                },
+                FuelSystem = session.Ship.FuelSystem == null ? null : new FuelSystemDto
+                {
+                    CurrentLevel = session.Ship.FuelSystem.CurrentLevel,
+                    CurrentFuel = session.Ship.FuelSystem.CurrentFuel
+                },
+                Shield = session.Ship.Shield == null ? null : new ShieldDto
+                {
+                    CurrentLevel = session.Ship.Shield.CurrentLevel,
+                    CurrentIntegrity = session.Ship.Shield.CurrentIntegrity,
+                    IsActive = session.Ship.Shield.IsActive
+                },
+                Hull = session.Ship.Hull == null ? null : new HullDto
+                {
+                    CurrentLevel = session.Ship.Hull.CurrentLevel,
+                    CurrentIntegrity = session.Ship.Hull.CurrentIntegrity
+                },
+                Engine = session.Ship.Engine == null ? null : new EngineDto
+                {
+                    CurrentLevel = session.Ship.Engine.CurrentLevel
+                },
+                CargoSystem = session.Ship.CargoSystem == null ? null : new CargoSystemDto
+                {
+                    CurrentLevel = session.Ship.CargoSystem.CurrentLevel,
+                    CurrentLoad = session.Ship.CargoSystem.CurrentLoad,
+                    MaxCapacity = session.Ship.CargoSystem.CalculateMaxCapacity()
+                },
+                WeaponSystem = session.Ship.WeaponSystem == null ? null : new WeaponSystemDto
+                {
+                    CurrentLevel = session.Ship.WeaponSystem.CurrentLevel
                 }
             };
 
@@ -391,6 +463,133 @@ namespace SpacePirates.API.Controllers
             if (system == null)
                 return NotFound();
             return Ok(MapToSolarSystemDto(system));
+        }
+
+        // POST: api/game/update-ship-fuel/{shipId}
+        [HttpPost("update-ship-fuel/{shipId}")]
+        public async Task<IActionResult> UpdateShipFuel(int shipId, [FromBody] double percentFuel)
+        {
+            var ship = await _db.Ships
+                .Include(s => s.FuelSystem)
+                .FirstOrDefaultAsync(s => s.Id == shipId);
+            if (ship == null || ship.FuelSystem == null) return NotFound();
+            ship.FuelSystem.CurrentFuel = percentFuel;
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+
+        // POST: api/game/update-ship-state/{shipId}
+        [HttpPost("update-ship-state/{shipId}")]
+        public async Task<IActionResult> UpdateShipState(int shipId, [FromBody] ShipUpdateDto dto)
+        {
+            var ship = await _db.Ships
+                .Include(s => s.Position)
+                .Include(s => s.FuelSystem)
+                .Include(s => s.Shield)
+                .Include(s => s.Hull)
+                .Include(s => s.Engine)
+                .Include(s => s.CargoSystem)
+                .Include(s => s.WeaponSystem)
+                .FirstOrDefaultAsync(s => s.Id == shipId);
+            if (ship == null) return NotFound();
+
+            // Update all mutable fields
+            if (ship.Position != null && dto.Position != null)
+            {
+                ship.Position.X = dto.Position.X;
+                ship.Position.Y = dto.Position.Y;
+            }
+            if (ship.FuelSystem != null && dto.FuelSystem != null)
+                ship.FuelSystem.CurrentFuel = dto.FuelSystem.CurrentFuel;
+            if (ship.Shield != null && dto.Shield != null)
+                ship.Shield.CurrentIntegrity = dto.Shield.CurrentIntegrity;
+            if (ship.Hull != null && dto.Hull != null)
+                ship.Hull.CurrentIntegrity = dto.Hull.CurrentIntegrity;
+            if (ship.Engine != null && dto.Engine != null)
+                ship.Engine.CurrentLevel = dto.Engine.CurrentLevel;
+            if (ship.CargoSystem != null && dto.CargoSystem != null)
+                ship.CargoSystem.CurrentLoad = dto.CargoSystem.CurrentLoad;
+            if (ship.WeaponSystem != null && dto.WeaponSystem != null)
+                ship.WeaponSystem.CurrentLevel = dto.WeaponSystem.CurrentLevel;
+
+            await _db.SaveChangesAsync();
+            return Ok();
+        }
+
+        [HttpPost("mine-planet-resource")]
+        public async Task<IActionResult> MinePlanetResource([FromBody] MineResourceRequest req)
+        {
+            var planet = await _db.Planets
+                .Include(p => p.Resources)
+                    .ThenInclude(r => r.Resource)
+                .FirstOrDefaultAsync(p => p.Id == req.PlanetId);
+            var ship = await _db.Ships
+                .Include(s => s.CargoSystem)
+                    .ThenInclude(cs => cs.CargoItems)
+                        .ThenInclude(ci => ci.Resource)
+                .FirstOrDefaultAsync(s => s.Id == req.ShipId);
+
+            if (planet == null || ship == null || ship.CargoSystem == null)
+                return NotFound();
+
+            var planetResource = planet.Resources.FirstOrDefault(r => r.ResourceId == req.ResourceId);
+            if (planetResource == null || planetResource.AmountAvailable < req.Amount)
+                return BadRequest("Not enough resource on planet.");
+
+            // Subtract from planet
+            planetResource.AmountAvailable -= req.Amount;
+
+            // Add to ship cargo (by resource type)
+            var cargoSystem = ship.CargoSystem;
+            var cargoItem = cargoSystem.CargoItems.FirstOrDefault(ci => ci.ResourceId == req.ResourceId);
+            if (cargoItem == null)
+            {
+                cargoItem = new SpacePirates.API.Models.ShipComponents.CargoItem
+                {
+                    ResourceId = req.ResourceId,
+                    Resource = planetResource.Resource,
+                    Amount = 0,
+                    CargoSystem = cargoSystem
+                };
+                cargoSystem.CargoItems.Add(cargoItem);
+            }
+            cargoItem.Amount += req.Amount;
+            // Update CurrentLoad as sum of all cargo item amounts
+            cargoSystem.CurrentLoad = cargoSystem.CargoItems.Sum(ci => ci.Amount);
+
+            await _db.SaveChangesAsync();
+
+            // Prepare response DTOs
+            var updatedPlanetResourceDto = new PlanetResourceDto
+            {
+                Id = planetResource.Id,
+                Resource = new ResourceDto
+                {
+                    Id = planetResource.Resource.Id,
+                    Name = planetResource.Resource.Name,
+                    ResourceType = planetResource.Resource.ResourceType,
+                    WeightPerUnit = planetResource.Resource.WeightPerUnit,
+                    Description = planetResource.Resource.Description
+                },
+                AmountAvailable = planetResource.AmountAvailable
+            };
+            var cargoItemsDto = cargoSystem.CargoItems.Select(ci => new {
+                Resource = new ResourceDto
+                {
+                    Id = ci.Resource.Id,
+                    Name = ci.Resource.Name,
+                    ResourceType = ci.Resource.ResourceType,
+                    WeightPerUnit = ci.Resource.WeightPerUnit,
+                    Description = ci.Resource.Description
+                },
+                Amount = ci.Amount
+            }).ToList();
+
+            return Ok(new {
+                planetResource = updatedPlanetResourceDto,
+                cargo = cargoItemsDto,
+                currentLoad = cargoSystem.CurrentLoad
+            });
         }
     }
 

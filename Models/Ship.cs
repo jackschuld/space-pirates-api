@@ -30,7 +30,7 @@ namespace SpacePirates.API.Models
 
         // Status
         public bool IsInCombat { get; set; }
-        public bool IsDestroyed => Hull.IsDestroyed;
+        public bool IsDestroyed => Hull != null && Hull.IsDestroyed;
         public DateTime LastDocked { get; set; } = DateTime.UtcNow;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

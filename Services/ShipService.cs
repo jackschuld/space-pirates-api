@@ -22,12 +22,32 @@ namespace SpacePirates.API.Services
 
         public async Task<Ship?> GetShipByIdAsync(int id)
         {
-            return await _context.Ships.FindAsync(id);
+            return await _context.Ships
+                .Include(s => s.Position)
+                .Include(s => s.Hull)
+                .Include(s => s.Shield)
+                .Include(s => s.Engine)
+                .Include(s => s.FuelSystem)
+                .Include(s => s.CargoSystem)
+                    .ThenInclude(cs => cs.CargoItems)
+                        .ThenInclude(ci => ci.Resource)
+                .Include(s => s.WeaponSystem)
+                .FirstOrDefaultAsync(s => s.Id == id);
         }
 
         public async Task<IEnumerable<Ship>> GetAllShipsAsync()
         {
-            return await _context.Ships.ToListAsync();
+            return await _context.Ships
+                .Include(s => s.Position)
+                .Include(s => s.Hull)
+                .Include(s => s.Shield)
+                .Include(s => s.Engine)
+                .Include(s => s.FuelSystem)
+                .Include(s => s.CargoSystem)
+                    .ThenInclude(cs => cs.CargoItems)
+                        .ThenInclude(ci => ci.Resource)
+                .Include(s => s.WeaponSystem)
+                .ToListAsync();
         }
 
         public async Task<Ship> UpdateShipAsync(Ship ship)

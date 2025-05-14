@@ -7,7 +7,7 @@ namespace SpacePirates.API.Models.ShipComponents
         
         public override int CalculateMaxCapacity()
         {
-            return CurrentLevel * 100; // 100 cargo units per level
+            return CurrentLevel * 250; // 250 cargo units per level
         }
     }
 } 
